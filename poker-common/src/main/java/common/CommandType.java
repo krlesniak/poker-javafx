@@ -135,5 +135,5 @@ public enum CommandType {
      * text message / instruction
      */
     MSG,
-
+    RESTART
 }

@@ -1,0 +1,105 @@
+/* GŁÓWNY STÓŁ - Ciemna zieleń z gradientem (efekt oświetlenia) */
+.root {
+    -fx-font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+    -fx-background-color: radial-gradient(center 50% 50%, radius 100%, #27ae60, #0e2f15);
+}
+
+/* ETYKIETY TEKSTOWE */
+.label {
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.8), 2, 0, 1, 1);
+}
+
+.pot-label {
+    -fx-font-size: 32px;
+    -fx-text-fill: #f1c40f; /* Złoty */
+    -fx-font-weight: bold;
+    -fx-font-family: "Georgia";
+}
+
+.phase-label {
+    -fx-text-fill: white;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-background-color: rgba(0, 0, 0, 0.4);
+    -fx-background-radius: 15;
+    -fx-padding: 8 20;
+    -fx-border-color: rgba(255, 255, 255, 0.2);
+    -fx-border-radius: 15;
+}
+
+/* PANEL DOLNY (AKCJE) */
+.action-panel {
+    -fx-background-color: linear-gradient(to bottom, #2c3e50, #000000);
+    -fx-background-radius: 15;
+    -fx-border-color: #d4af37;
+    -fx-border-width: 2;
+    -fx-border-radius: 15;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.6), 10, 0, 0, 5);
+}
+
+/* ELEMENT GRACZA (PlayerNode) */
+.player-node {
+    -fx-background-color: linear-gradient(to bottom, rgba(40, 40, 40, 0.8), rgba(10, 10, 10, 0.9));
+    -fx-background-radius: 10;
+    -fx-padding: 10;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.5), 10, 0, 0, 5);
+    /* Obramowanie jest nadawane dynamicznie w Javie, ale baza jest tutaj */
+}
+
+.player-name {
+    -fx-text-fill: #ecf0f1;
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+    -fx-padding: 0 0 5 0;
+}
+
+.player-chips {
+    -fx-text-fill: #f1c40f;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+}
+
+/* PRZYCISKI */
+.button {
+    -fx-background-color: linear-gradient(#f1c40f, #bf9000);
+    -fx-text-fill: #2c0e00;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+    -fx-background-radius: 5;
+    -fx-padding: 8 15;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(one-pass-box, rgba(0,0,0,0.4), 2, 0, 0, 2);
+}
+
+.button:hover {
+    -fx-background-color: linear-gradient(#ffdd59, #d4af37);
+}
+
+.button:pressed {
+    -fx-background-color: #a37c00;
+}
+
+.button:disabled {
+    -fx-opacity: 0.6;
+    -fx-background-color: #95a5a6;
+}
+
+/* SPECJALNE PRZYCISKI */
+.button-fold { -fx-background-color: linear-gradient(#e74c3c, #c0392b); -fx-text-fill: white; }
+.button-fold:hover { -fx-background-color: linear-gradient(#ff6b6b, #e74c3c); }
+
+.button-check { -fx-background-color: linear-gradient(#3498db, #2980b9); -fx-text-fill: white; }
+.button-check:hover { -fx-background-color: linear-gradient(#5dade2, #3498db); }
+
+.button-start { -fx-background-color: linear-gradient(#2ecc71, #27ae60); -fx-text-fill: white; -fx-font-size: 16px; -fx-padding: 10 30; }
+.button-restart { -fx-background-color: linear-gradient(#e67e22, #d35400); -fx-text-fill: white; }
+
+/* POLE TEKSTOWE */
+.text-field {
+    -fx-background-color: #34495e;
+    -fx-text-fill: white;
+    -fx-border-color: #7f8c8d;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+    -fx-font-weight: bold;
+}

@@ -43,7 +43,7 @@ public class PokerClientAppMain {
         GameClient client = new GameClient(SERVER_HOST, SERVER_PORT);
 
         try {
-            // start connection womp womp checking for git push
+            // start connection
             client.start();
 
             // reading from keyboard
