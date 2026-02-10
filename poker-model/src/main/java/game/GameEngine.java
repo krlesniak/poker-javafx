@@ -20,7 +20,7 @@ public class GameEngine {
     private int pool;
     private int currentBet;
     private int playersTurnIdx;
-    private int dealerIdx = -1; // Nowe pole do śledzenia Dealera
+    private int dealerIdx = -1; // spy for dealer
     private Player roundWinner;
     private String winningDesc = "";
 
@@ -70,7 +70,7 @@ public class GameEngine {
         this.winningDesc = "";
         this.roundWinner = null;
 
-        // Przesunięcie Dealera co rundę
+        // moving dealer chip every round
         if (!players.isEmpty()) {
             dealerIdx = (dealerIdx + 1) % players.size();
         }
@@ -88,7 +88,8 @@ public class GameEngine {
 
         players.forEach(Player::newPhaseReset);
 
-        playersTurnIdx = 0;
+        // dealer starts every round
+        playersTurnIdx = dealerIdx;
     }
 
     public void handleBetMove(Player player, String move, int amount) {
@@ -144,9 +145,10 @@ public class GameEngine {
 
     private void nextTurn() {
         int active = (int) players.stream().filter(p -> !p.isFolded()).count();
+        // last player standing -> winning by walkover
         if (active <= 1) {
             roundWinner = players.stream().filter(p -> !p.isFolded()).findFirst().orElse(null);
-            winningDesc = "Folded";
+            winningDesc = "Other_Players_Folded";
             state = GameState.PAYOUT;
             return;
         }
@@ -166,7 +168,9 @@ public class GameEngine {
     private void changeState() {
         players.forEach(Player::newPhaseReset);
         currentBet = 0;
-        playersTurnIdx = 0;
+
+        // looking for dealer in each phase
+        playersTurnIdx = dealerIdx;
         while (players.get(playersTurnIdx).isFolded() || players.get(playersTurnIdx).getChips() == 0) {
             playersTurnIdx = (playersTurnIdx + 1) % players.size();
         }
@@ -174,13 +178,11 @@ public class GameEngine {
         if (state == GameState.BET1) state = GameState.DRAW;
         else if (state == GameState.DRAW) state = GameState.BET2;
         else if (state == GameState.BET2) {
-            // Zamiast doShowdown(), przechodzimy w stan oczekiwania
-            state = GameState.SHOWDOWN;// Oznaczamy, że betting się skończył [cite: 36]
+            state = GameState.SHOWDOWN;
         }
     }
 
     private void doShowdown() {
-        state = GameState.SHOWDOWN;
         Player winner = null; HandValue best = null;
         for (Player p : players) {
             if (!p.isFolded()) {

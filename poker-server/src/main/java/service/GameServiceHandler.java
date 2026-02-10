@@ -57,7 +57,7 @@ public class GameServiceHandler {
 
         // loading a table
         GameEngine engine = activeGames.computeIfAbsent(finalGameId, id -> {
-            gameHosts.put(id, senderId); // Pierwsza osoba na nowym stole zostaje Hostem
+            gameHosts.put(id, senderId);
             return new GameEngine(id, 10, 10);
         });
 
@@ -71,7 +71,6 @@ public class GameServiceHandler {
         String hostId = gameHosts.get(finalGameId);
         StringBuilder sb = new StringBuilder();
 
-        // WELCOME zawiera finalGameId - dzięki temu klient wie, na którym stole wylądował
         sb.append(CommandParser.createMessage(CommandType.WELCOME, finalGameId, senderId, hostId));
 
         for (Player pl : engine.getPlayers()) {
@@ -132,6 +131,11 @@ public class GameServiceHandler {
             String dealerId = engine.getPlayers().get(engine.getDealerIdx()).getId();
             sb.append(CommandParser.createMessage(CommandType.DEALER, dealerId));
         }
+
+        // dealer starts
+        Player active = engine.getPlayers().get(engine.getPlayersTurnIdx());
+        sb.append(CommandParser.createMessage(CommandType.TURN, active.getId(), active.getName(), engine.getState().name(), String.valueOf(engine.getCurrentBet())));
+
         return sb.toString();
     }
 
@@ -146,11 +150,30 @@ public class GameServiceHandler {
                 CommandParser.createMessage(CommandType.JOIN, p.getId(), p.getName(), String.valueOf(p.getChips())) +
                 CommandParser.createMessage(CommandType.LOG, p.getName() + "_" + cmd.getType().name());
 
+        // last player standing
+        if (engine.getState() == GameState.PAYOUT) {
+            Player winner = engine.getRoundWinner();
+            int finalPool = engine.getPool();
+            String desc = engine.getWinningDesc();
+            engine.handlePayout();
+
+            String winMsg = CommandParser.createMessage(CommandType.WINNER, winner.getName(), String.valueOf(finalPool), desc);
+            String logWin = CommandParser.createMessage(CommandType.LOG, "WINNER:_" + winner.getName() + "_by_walkover");
+            String chipsUpdate = CommandParser.createMessage(CommandType.JOIN, winner.getId(), winner.getName(), String.valueOf(winner.getChips()));
+
+            return new ServiceResult(base + winMsg + logWin + chipsUpdate, true, gameId);
+        }
+
         if (engine.getState() == GameState.SHOWDOWN) {
             String dealerId = engine.getPlayers().get(engine.getDealerIdx()).getId();
             return new ServiceResult(base + CommandParser.createMessage(CommandType.LOG, "WAITING_FOR_SHOWDOWN") + "READY_SHOWDOWN " + dealerId, true, gameId);
         }
-        return new ServiceResult(base, true, gameId);
+
+        // notification about next round
+        Player active = engine.getPlayers().get(engine.getPlayersTurnIdx());
+        String turnMsg = CommandParser.createMessage(CommandType.TURN, active.getId(), active.getName(), engine.getState().name(), String.valueOf(engine.getCurrentBet()));
+
+        return new ServiceResult(base + turnMsg, true, gameId);
     }
 
     private ServiceResult handleDraw(String senderId, String gameId, GameCommand cmd) {
@@ -159,7 +182,13 @@ public class GameServiceHandler {
         engine.handleDraw(p, cmd.getIntListParams());
         String handStr = getCardsString(p);
         String rankStr = handChecker.checker(p.getHand()).ranking().toString().replace(" ", "_");
-        return new ServiceResult(CommandParser.createMessage(CommandType.DEAL, handStr + " STR:" + rankStr) + CommandParser.createMessage(CommandType.LOG, p.getName() + "_EXCHANGED"), false, gameId);
+
+        String drawResult = CommandParser.createMessage(CommandType.DEAL, handStr + " STR:" + rankStr) + CommandParser.createMessage(CommandType.LOG, p.getName() + "_EXCHANGED");
+
+        Player active = engine.getPlayers().get(engine.getPlayersTurnIdx());
+        String turnMsg = CommandParser.createMessage(CommandType.TURN, active.getId(), active.getName(), engine.getState().name(), String.valueOf(engine.getCurrentBet()));
+
+        return new ServiceResult(drawResult + turnMsg, false, gameId);
     }
 
     private String getCardsString(Player p) {
