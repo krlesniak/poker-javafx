@@ -135,5 +135,11 @@ public enum CommandType {
      * text message / instruction
      */
     MSG,
-    RESTART
+    RESTART,
+    DEALER,
+    LOG,
+    STRENGTH,
+    FULL_RESET,
+    READY_SHOWDOWN,
+    REVEAL,
 }

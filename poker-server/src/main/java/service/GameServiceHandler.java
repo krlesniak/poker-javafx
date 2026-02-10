@@ -4,6 +4,7 @@ import cards.Card;
 import common.*;
 import game.GameEngine;
 import game.GameState;
+import hierarchy.HandChecker;
 import players.Player;
 import java.util.*;
 
@@ -11,6 +12,7 @@ public class GameServiceHandler {
     private final Map<String, GameEngine> activeGames = Collections.synchronizedMap(new HashMap<>());
     public final Map<String, String> playerGameMap = Collections.synchronizedMap(new HashMap<>());
     private final Map<String, String> gameHosts = Collections.synchronizedMap(new HashMap<>());
+    private final HandChecker handChecker = new HandChecker();
 
     public record ServiceResult(String message, boolean broadcast, String targetGameId) {}
 
@@ -21,6 +23,8 @@ public class GameServiceHandler {
                 case JOIN -> handleJoin(senderId, cmd);
                 case START -> handleStart(senderId, gameId);
                 case RESTART -> handleRestart(senderId, gameId);
+                case FULL_RESET -> handleFullReset(senderId, gameId);
+                case SHOWDOWN -> handleShowdownRequest(senderId, gameId);
                 case BET, CALL, CHECK, FOLD -> handleMove(senderId, gameId, cmd);
                 case DRAW -> handleDraw(senderId, gameId, cmd);
                 default -> new ServiceResult(CommandParser.createMessage(CommandType.OK), false, gameId);
@@ -31,89 +35,142 @@ public class GameServiceHandler {
     }
 
     private ServiceResult handleJoin(String senderId, GameCommand cmd) {
-        String gameId = cmd.getParameters()[0];
-        GameEngine engine = activeGames.computeIfAbsent(gameId, id -> {
-            gameHosts.put(id, senderId);
-            return new GameEngine(id, 10, 50);
-        });
+        String requestedGameId = cmd.getParameters()[0];
+        String finalGameId = requestedGameId;
 
-        Player existing = engine.getPlayers().stream().filter(p -> p.getId().equals(senderId)).findFirst().orElse(null);
-        Player p = (existing != null) ? existing : new Player(senderId, cmd.getParameters()[1], 1000);
-        if (existing == null) engine.addPlayer(p);
+        // logic for a new table
+        GameEngine existingEngine = activeGames.get(requestedGameId);
 
-        playerGameMap.put(senderId, gameId);
-
-        StringBuilder response = new StringBuilder();
-        response.append(CommandParser.createMessage(CommandType.WELCOME, gameId, senderId));
-        response.append(CommandParser.createMessage(CommandType.JOIN, senderId, p.getName(), String.valueOf(p.getChips())));
-
-        for (Player oldPlayer : engine.getPlayers()) {
-            if (!oldPlayer.getId().equals(senderId)) {
-                response.append(CommandParser.createMessage(CommandType.JOIN, oldPlayer.getId(), oldPlayer.getName(), String.valueOf(oldPlayer.getChips())));
+        // if a table is full we create a new one
+        if (existingEngine != null && existingEngine.getPlayers().size() >= 4) {
+            int tableNumber = 2;
+            while (true) {
+                String candidateId = requestedGameId + "_" + tableNumber;
+                GameEngine nextTable = activeGames.get(candidateId);
+                if (nextTable == null || nextTable.getPlayers().size() < 4) {
+                    finalGameId = candidateId;
+                    break;
+                }
+                tableNumber++;
             }
         }
 
-        return new ServiceResult(response.toString(), true, gameId);
+        // loading a table
+        GameEngine engine = activeGames.computeIfAbsent(finalGameId, id -> {
+            gameHosts.put(id, senderId); // Pierwsza osoba na nowym stole zostaje Hostem
+            return new GameEngine(id, 10, 10);
+        });
+
+        // adding a player
+        Player existing = engine.getPlayers().stream().filter(p -> p.getId().equals(senderId)).findFirst().orElse(null);
+        Player p = (existing != null) ? existing : new Player(senderId, "Player_" + (engine.getPlayers().size() + 1), 1000);
+
+        if (existing == null) engine.addPlayer(p);
+        playerGameMap.put(senderId, finalGameId);
+
+        String hostId = gameHosts.get(finalGameId);
+        StringBuilder sb = new StringBuilder();
+
+        // WELCOME zawiera finalGameId - dzięki temu klient wie, na którym stole wylądował
+        sb.append(CommandParser.createMessage(CommandType.WELCOME, finalGameId, senderId, hostId));
+
+        for (Player pl : engine.getPlayers()) {
+            sb.append(CommandParser.createMessage(CommandType.JOIN, pl.getId(), pl.getName(), String.valueOf(pl.getChips())));
+        }
+
+        if (engine.getDealerIdx() != -1) {
+            sb.append(CommandParser.createMessage(CommandType.DEALER, engine.getPlayers().get(engine.getDealerIdx()).getId()));
+        }
+
+        return new ServiceResult(sb.toString(), true, finalGameId);
     }
 
     private ServiceResult handleStart(String senderId, String gameId) {
-        if (!senderId.equals(gameHosts.get(gameId))) return new ServiceResult(CommandParser.createMessage(CommandType.ERR, "Only Host"), false, null);
-
-        GameEngine engine = getEngine(gameId);
-        engine.startGame();
-
-        // POPRAWKA: Wysyłamy STARTED oraz od razu aktualny stan puli (Ante)
-        String started = CommandParser.createMessage(CommandType.STARTED, String.valueOf(engine.getAnteAmount()));
-        String round = CommandParser.createMessage(CommandType.ROUND, String.valueOf(engine.getPool()), "0");
-        return new ServiceResult(started + round, true, gameId);
+        if (!senderId.equals(gameHosts.get(gameId))) return new ServiceResult(CommandParser.createMessage(CommandType.ERR, "Only Host can start"), false, null);
+        return handleRestart(senderId, gameId);
     }
 
     private ServiceResult handleRestart(String senderId, String gameId) {
-        if (!senderId.equals(gameHosts.get(gameId))) return new ServiceResult(CommandParser.createMessage(CommandType.ERR, "Only Host"), false, null);
-
         GameEngine engine = getEngine(gameId);
-        engine.restartGame();
+        try { engine.restartGame(); } catch (Exception e) { return new ServiceResult(CommandParser.createMessage(CommandType.ERR, e.getMessage()), false, null); }
+        return new ServiceResult(generateSyncMessages(engine), true, gameId);
+    }
 
-        StringBuilder updates = new StringBuilder();
-        updates.append(CommandParser.createMessage(CommandType.STARTED, String.valueOf(engine.getAnteAmount())));
+    private ServiceResult handleFullReset(String senderId, String gameId) {
+        if (!senderId.equals(gameHosts.get(gameId))) return new ServiceResult(CommandParser.createMessage(CommandType.ERR, "Only Host can reset"), false, null);
+        GameEngine engine = getEngine(gameId);
+        engine.hardResetGame();
+        return new ServiceResult(CommandParser.createMessage(CommandType.LOG, "GAME_HAS_BEEN_RESET") + generateSyncMessages(engine), true, gameId);
+    }
 
-        // POPRAWKA: Natychmiastowa aktualizacja puli po restarcie
-        updates.append(CommandParser.createMessage(CommandType.ROUND, String.valueOf(engine.getPool()), "0"));
+    private ServiceResult handleShowdownRequest(String senderId, String gameId) {
+        GameEngine engine = getEngine(gameId);
+        if (engine.getDealerIdx() == -1) return null;
+        if (!senderId.equals(engine.getPlayers().get(engine.getDealerIdx()).getId())) return null;
 
-        for(Player p : engine.getPlayers()) {
-            updates.append(CommandParser.createMessage(CommandType.JOIN, p.getId(), p.getName(), String.valueOf(p.getChips())));
+        engine.processShowdown();
+        StringBuilder sb = new StringBuilder();
+        for (Player p : engine.getPlayers()) {
+            if (!p.isFolded()) sb.append("REVEAL ").append(p.getId()).append(" ").append(getCardsString(p)).append("\n");
         }
+        Player winner = engine.getRoundWinner();
+        engine.handlePayout();
+        sb.append(CommandParser.createMessage(CommandType.WINNER, winner.getName(), String.valueOf(engine.getPool()), engine.getWinningDesc().replace(" ", "_")));
+        sb.append(CommandParser.createMessage(CommandType.LOG, "WINNER:_" + winner.getName() + "_(" + engine.getWinningDesc().replace(" ", "_") + ")"));
+        sb.append(CommandParser.createMessage(CommandType.JOIN, winner.getId(), winner.getName(), String.valueOf(winner.getChips())));
+        return new ServiceResult(sb.toString(), true, gameId);
+    }
 
-        return new ServiceResult(updates.toString(), true, gameId);
+    private String generateSyncMessages(GameEngine engine) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(CommandParser.createMessage(CommandType.STARTED, String.valueOf(engine.getAnteAmount())));
+        sb.append(CommandParser.createMessage(CommandType.ROUND, String.valueOf(engine.getPool()), "0"));
+        for (Player p : engine.getPlayers()) {
+            sb.append(CommandParser.createMessage(CommandType.JOIN, p.getId(), p.getName(), String.valueOf(p.getChips())));
+        }
+        if (engine.getDealerIdx() != -1) {
+            String dealerId = engine.getPlayers().get(engine.getDealerIdx()).getId();
+            sb.append(CommandParser.createMessage(CommandType.DEALER, dealerId));
+        }
+        return sb.toString();
     }
 
     private ServiceResult handleMove(String senderId, String gameId, GameCommand cmd) {
         GameEngine engine = getEngine(gameId);
         Player p = engine.getPlayers().stream().filter(pl -> pl.getId().equals(senderId)).findFirst().orElseThrow();
-        engine.handleBetMove(p, cmd.getType().name(), cmd.getParameters().length > 0 ? cmd.getIntParam(0) : 0);
+        int amount = cmd.getParameters().length > 0 ? cmd.getIntParam(0) : 0;
+        engine.handleBetMove(p, cmd.getType().name(), amount);
 
-        if (engine.getState() == GameState.PAYOUT) {
-            engine.handlePayout();
-            Player winner = engine.getRoundWinner();
-            String msg = CommandParser.createMessage(CommandType.WINNER, winner.getName(), String.valueOf(engine.getPool()), engine.getWinningDesc().replace(" ", "_"));
-            return new ServiceResult(msg, true, gameId);
+        String base = CommandParser.createMessage(CommandType.ACTION, senderId, cmd.getType().name(), String.valueOf(p.getTotalRoundBet()), "0") +
+                CommandParser.createMessage(CommandType.ROUND, String.valueOf(engine.getPool()), String.valueOf(engine.getCurrentBet())) +
+                CommandParser.createMessage(CommandType.JOIN, p.getId(), p.getName(), String.valueOf(p.getChips())) +
+                CommandParser.createMessage(CommandType.LOG, p.getName() + "_" + cmd.getType().name());
+
+        if (engine.getState() == GameState.SHOWDOWN) {
+            String dealerId = engine.getPlayers().get(engine.getDealerIdx()).getId();
+            return new ServiceResult(base + CommandParser.createMessage(CommandType.LOG, "WAITING_FOR_SHOWDOWN") + "READY_SHOWDOWN " + dealerId, true, gameId);
         }
-        return new ServiceResult(CommandParser.createMessage(CommandType.ROUND, String.valueOf(engine.getPool()), String.valueOf(engine.getCurrentBet())), true, gameId);
+        return new ServiceResult(base, true, gameId);
     }
 
     private ServiceResult handleDraw(String senderId, String gameId, GameCommand cmd) {
         GameEngine engine = getEngine(gameId);
         Player p = engine.getPlayers().stream().filter(pl -> pl.getId().equals(senderId)).findFirst().orElseThrow();
         engine.handleDraw(p, cmd.getIntListParams());
+        String handStr = getCardsString(p);
+        String rankStr = handChecker.checker(p.getHand()).ranking().toString().replace(" ", "_");
+        return new ServiceResult(CommandParser.createMessage(CommandType.DEAL, handStr + " STR:" + rankStr) + CommandParser.createMessage(CommandType.LOG, p.getName() + "_EXCHANGED"), false, gameId);
+    }
 
+    private String getCardsString(Player p) {
         StringBuilder sb = new StringBuilder();
         for (Card c : p.getHand().getCards()) sb.append(c.rank().name()).append("_").append(c.suit().name()).append(" ");
-        return new ServiceResult(CommandParser.createMessage(CommandType.DEAL, sb.toString().trim()), false, gameId);
+        return sb.toString().trim();
     }
 
     public GameEngine getEngine(String gameId) {
         GameEngine e = activeGames.get(gameId);
-        if (e == null) throw new IllegalArgumentException("Brak gry");
+        if (e == null) throw new IllegalArgumentException("No Game found for ID: " + gameId);
         return e;
     }
 }

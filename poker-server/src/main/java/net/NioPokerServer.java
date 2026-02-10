@@ -10,7 +10,6 @@ import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import service.GameServiceHandler;
-import cards.Card;
 
 public class NioPokerServer implements Runnable {
     private final int port;
@@ -72,7 +71,7 @@ public class NioPokerServer implements Runnable {
             state.setPlayerId(senderId);
         }
 
-        // POPRAWKA: Rozdajemy karty przy START oraz RESTART
+        // Pdealing cards when START and RESTART
         if ((cmd.getType() == CommandType.START || cmd.getType() == CommandType.RESTART)
                 && state.getGameId() != null && !res.message().startsWith("ERR")) {
             sendDealMessages(state.getGameId());
@@ -94,6 +93,7 @@ public class NioPokerServer implements Runnable {
         if (state.getGameId() != null) broadcastTurn(state.getGameId());
     }
 
+    // info to everyone
     private void broadcastTurn(String gameId) {
         GameEngine e = gameHandler.getEngine(gameId);
         if (e.getState() == game.GameState.LOBBY || e.getState() == game.GameState.END) return;
@@ -101,6 +101,7 @@ public class NioPokerServer implements Runnable {
         broadcast(gameId, CommandParser.createMessage(CommandType.TURN, active.getId(), active.getName(), e.getState().name()));
     }
 
+    // message to one player
     private void sendDealMessages(String gameId) {
         GameEngine engine = gameHandler.getEngine(gameId);
         for (SelectionKey k : selector.keys()) {

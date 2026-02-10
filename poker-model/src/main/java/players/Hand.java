@@ -16,7 +16,6 @@ public class Hand {
         cards.add(card);
     }
 
-    // NAPRAWIONO: Dodano brakującą metodę clear()
     public void clear() {
         cards.clear();
     }
@@ -25,7 +24,13 @@ public class Hand {
         Collections.sort(cards);
     }
 
-    // NAPRAWIONO: Logikę usuwania. Trzeba usuwać od tyłu (reverseOrder), żeby indeksy się nie przesuwały.
+    // method for replacing cards on chosen positions
+    public void replace(int index, Card card) {
+        if (index >= 0 && index < cards.size()) {
+            cards.set(index, card);
+        }
+    }
+
     public void removeCards(List<Integer> indexes){
         indexes.sort(Collections.reverseOrder());
         for (int i : indexes) {
@@ -39,7 +44,6 @@ public class Hand {
         return new ArrayList<>(cards);
     }
 
-    // NAPRAWIONO: Dodano brakującą metodę size()
     public int size() {
         return cards.size();
     }

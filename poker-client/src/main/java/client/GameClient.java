@@ -18,7 +18,7 @@ public class GameClient {
     private BufferedReader in;
     private boolean running;
 
-    // NOWE: Słuchacz dla GUI
+    // listener for gui
     private Consumer<GameCommand> onCommandReceived;
 
     public GameClient(String host, int port) {
@@ -55,7 +55,7 @@ public class GameClient {
 
     private void processServerMessage(String message) {
         GameCommand cmd = CommandParser.parse(message);
-        // Przesyłamy komendę do wątku JavaFX
+        // command sent to the javafx
         if (onCommandReceived != null) {
             Platform.runLater(() -> onCommandReceived.accept(cmd));
         }

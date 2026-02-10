@@ -4,9 +4,8 @@ import cards.Deck;
 import hierarchy.HandChecker;
 import hierarchy.HandValue;
 import players.Player;
-
-import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
 
 public class GameEngine {
     private final String gameId;
@@ -15,11 +14,13 @@ public class GameEngine {
     private final HandChecker handChecker;
     private final int minBet;
     private final int anteAmount;
+    private boolean showdownTriggered = false; // flag for dealer
 
     private GameState state;
     private int pool;
     private int currentBet;
     private int playersTurnIdx;
+    private int dealerIdx = -1; // Nowe pole do śledzenia Dealera
     private Player roundWinner;
     private String winningDesc = "";
 
@@ -36,85 +37,91 @@ public class GameEngine {
     }
 
     public void addPlayer(Player player) {
-        if (state != GameState.LOBBY && state != GameState.END) throw new IllegalStateException("Gra trwa");
+        if (state != GameState.LOBBY && state != GameState.END) throw new IllegalStateException("Game already started");
         if (players.stream().noneMatch(p -> p.getId().equals(player.getId()))) {
             players.add(player);
         }
     }
 
-    public void restartGame() {
-        if (players.size() < 2) throw new IllegalStateException("Za mało graczy");
-
-        this.state = GameState.ANTE;
-        this.pool = 0;
-        this.currentBet = 0;
-        this.roundWinner = null;
-        this.winningDesc = "";
-
+    public void hardResetGame() {
+        if (players.size() < 2) throw new IllegalStateException("Too few players");
         for (Player p : players) {
             p.resetRound();
-            if (p.getChips() >= anteAmount) {
-                p.bet(anteAmount);
-                pool += anteAmount;
-            } else {
-                p.fold();
-            }
+            int diff = 1000 - p.getChips();
+            p.addChips(diff);
         }
+        startGame();
+    }
 
-        // Resetujemy zakłady po ante
-        players.forEach(Player::newPhaseReset);
-
-        this.state = GameState.DEAL;
-        deck.reset();
-        for (int i = 0; i < 5; i++) {
-            for (Player p : players) {
-                if(!p.isFolded()) deck.deal().ifPresent(c -> p.getHand().addCard(c));
-            }
+    public void restartGame() {
+        if (players.size() < 2) throw new IllegalStateException("Too few players");
+        for (Player p : players) {
+            if (p.getChips() <= 0) throw new IllegalStateException("Player " + p.getName() +
+                    " lost all his / her chips. click RESET GAME to start a new game.");
         }
-
-        this.state = GameState.BET1;
-        this.currentBet = 0;
-        this.playersTurnIdx = 0;
-        while (players.get(playersTurnIdx).isFolded()) {
-            playersTurnIdx = (playersTurnIdx + 1) % players.size();
-        }
+        startGame();
     }
 
     public void startGame() {
-        restartGame();
+        this.state = GameState.BET1;
+        this.deck.reset();
+        this.pool = 0;
+        this.currentBet = 0;
+        this.winningDesc = "";
+        this.roundWinner = null;
+
+        // Przesunięcie Dealera co rundę
+        if (!players.isEmpty()) {
+            dealerIdx = (dealerIdx + 1) % players.size();
+        }
+
+        for (Player p : players) {
+            p.resetRound();
+            int ante = Math.min(p.getChips(), anteAmount);
+            p.bet(ante);
+            pool += ante;
+
+            for (int i = 0; i < 5; i++) {
+                p.getHand().addCard(deck.deal().orElseThrow());
+            }
+        }
+
+        players.forEach(Player::newPhaseReset);
+
+        playersTurnIdx = 0;
     }
 
-    public void handleBetMove(Player player, String action, int amount) {
-        if (players.indexOf(player) != playersTurnIdx) throw new IllegalStateException("Nie Twoja tura");
+    public void handleBetMove(Player player, String move, int amount) {
+        if (!players.get(playersTurnIdx).equals(player)) throw new IllegalStateException("Not your turn");
 
-        switch (action.toUpperCase()) {
-            case "FOLD" -> {
-                player.fold();
-                player.setActed(true);
-            }
+        switch (move) {
+            case "FOLD" -> player.fold();
             case "CHECK" -> {
-                if (currentBet > player.getCurrBet()) throw new IllegalArgumentException("Musisz wyrównać (CALL) lub przebić (BET)");
+                if (player.getCurrBet() < currentBet) throw new IllegalArgumentException("You have to equalize (CALL)!");
                 player.setActed(true);
             }
             case "CALL" -> {
-                int toCall = currentBet - player.getCurrBet();
-                if (toCall > 0) {
-                    player.bet(toCall);
-                    pool += toCall;
-                }
+                int needed = currentBet - player.getCurrBet();
+                int toPay = Math.max(0, Math.min(needed, player.getChips()));
+                player.bet(toPay);
+                pool += toPay;
                 player.setActed(true);
             }
             case "BET" -> {
-                if (amount < minBet) throw new IllegalArgumentException("Za mały BET");
+                if (amount < minBet) throw new IllegalArgumentException("Minimal bet is" + minBet);
+                if (amount > player.getChips()) throw new IllegalArgumentException("Insufficient funds!");
+
                 int potentialTotal = player.getCurrBet() + amount;
-                if (potentialTotal <= currentBet) throw new IllegalArgumentException("Przebicie musi być wyższe");
+                if (potentialTotal < currentBet) throw new IllegalArgumentException("The bet must match the stake");
 
                 player.bet(amount);
                 pool += amount;
-                currentBet = player.getCurrBet();
 
-                for(Player p : players) {
-                    if (p != player && !p.isFolded()) p.setActed(false);
+                if (player.getCurrBet() > currentBet) {
+                    currentBet = player.getCurrBet();
+                    for(Player p : players) {
+                        if (p != player && !p.isFolded() && p.getChips() > 0) p.setActed(false);
+                    }
                 }
                 player.setActed(true);
             }
@@ -123,44 +130,53 @@ public class GameEngine {
     }
 
     public void handleDraw(Player player, List<Integer> indices) {
-        if (state != GameState.DRAW) throw new IllegalStateException("To nie DRAW");
-        if (players.indexOf(player) != playersTurnIdx) throw new IllegalStateException("Nie Twoja tura");
+        if (state != GameState.DRAW) throw new IllegalStateException("Wrong phase");
+        if (!players.get(playersTurnIdx).equals(player)) throw new IllegalStateException("It is not your turn");
 
-        player.getHand().removeCards(indices);
-        for (int i = 0; i < indices.size(); i++) deck.deal().ifPresent(c -> player.getHand().addCard(c));
-
+        for (int i : indices) {
+            if (i >= 0 && i < 5) {
+                player.getHand().replace(i, deck.deal().orElseThrow());
+            }
+        }
         player.setActed(true);
         nextTurn();
     }
 
     private void nextTurn() {
-        if (players.stream().filter(p -> !p.isFolded()).count() <= 1) {
-            doShowdown();
+        int active = (int) players.stream().filter(p -> !p.isFolded()).count();
+        if (active <= 1) {
+            roundWinner = players.stream().filter(p -> !p.isFolded()).findFirst().orElse(null);
+            winningDesc = "Folded";
+            state = GameState.PAYOUT;
             return;
         }
-        if (isPhaseFinished()) {
-            changeState();
-            return;
-        }
-        do {
-            playersTurnIdx = (playersTurnIdx + 1) % players.size();
-        } while (players.get(playersTurnIdx).isFolded());
-    }
 
-    private boolean isPhaseFinished() {
-        return players.stream().filter(p -> !p.isFolded())
-                .allMatch(p -> p.hasActed() && (state == GameState.DRAW || p.getCurrBet() == currentBet));
+        boolean phaseDone = players.stream()
+                .filter(p -> !p.isFolded() && p.getChips() > 0)
+                .allMatch(Player::hasActed);
+
+        if (phaseDone) changeState();
+        else {
+            do {
+                playersTurnIdx = (playersTurnIdx + 1) % players.size();
+            } while (players.get(playersTurnIdx).isFolded() || players.get(playersTurnIdx).getChips() == 0);
+        }
     }
 
     private void changeState() {
         players.forEach(Player::newPhaseReset);
         currentBet = 0;
         playersTurnIdx = 0;
-        while (players.get(playersTurnIdx).isFolded()) playersTurnIdx++;
+        while (players.get(playersTurnIdx).isFolded() || players.get(playersTurnIdx).getChips() == 0) {
+            playersTurnIdx = (playersTurnIdx + 1) % players.size();
+        }
 
         if (state == GameState.BET1) state = GameState.DRAW;
         else if (state == GameState.DRAW) state = GameState.BET2;
-        else if (state == GameState.BET2) doShowdown();
+        else if (state == GameState.BET2) {
+            // Zamiast doShowdown(), przechodzimy w stan oczekiwania
+            state = GameState.SHOWDOWN;// Oznaczamy, że betting się skończył [cite: 36]
+        }
     }
 
     private void doShowdown() {
@@ -173,9 +189,13 @@ public class GameEngine {
             }
         }
         roundWinner = winner;
-        // ZMIANA: Teraz pobieramy tylko nazwę rankingu, bez brzydkich nawiasów []
-        winningDesc = (best != null) ? best.ranking().toString() : "Walkower";
+        winningDesc = (best != null) ? best.ranking().toString() : "Folded";
         state = GameState.PAYOUT;
+    }
+
+    public void processShowdown() {
+        if (state != GameState.SHOWDOWN) return;
+        doShowdown();
     }
 
     public void handlePayout() {
@@ -191,4 +211,5 @@ public class GameEngine {
     public Player getRoundWinner() { return roundWinner; }
     public String getWinningDesc() { return winningDesc; }
     public int getPlayersTurnIdx() { return playersTurnIdx; }
+    public int getDealerIdx() { return dealerIdx; }
 }
