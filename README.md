@@ -63,7 +63,7 @@ The project is divided into four Maven modules:
 1.  Clone the repository:
     ```bash
     git clone [https://github.com/your-username/poker-5card-draw.git](https://github.com/your-username/poker-5card-draw.git)
-    cd poker-game-visual
+    cd poker-javafx
     ```
 2.  Build the project:
     ```bash
