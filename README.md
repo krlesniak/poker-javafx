@@ -62,7 +62,7 @@ The project is divided into four Maven modules:
 ### Installation
 1.  Clone the repository:
     ```bash
-    git clone [https://github.com/krlesniak/poker-javafx.git]
+    git clone https://github.com/krlesniak/poker-javafx.git
     ```
 2.  Build the project:
     ```bash
@@ -74,18 +74,18 @@ The project is divided into four Maven modules:
 #### 1. Start the Server
 Navigate to the server module and run the application. The server defaults to port `7777`.
 ```bash
-    cd poker-server/src/main/java/net
-    mvn javafx:run
-    # Or run the PokerServerAppMain class directly from your IDE
+    enter package poker-server/src/main/java/net
+    
+    run the PokerServerAppMain class directly from your IDE
 ```
  
  
 #### 2. Start the Clients
 Open multiple terminal instances (or run multiple instances in your IDE) for the client.
 ```bash
-  cd poker-client/src/main/java/client/gui
-  mvn javafx:run
-  # Or run the PokerGuiLauncher class directly from your IDE
+  enter package poker-client/src/main/java/client/gui
+  
+  run the PokerGuiLauncher class directly from your IDE
 ```
 > **💡 Multi-player Tip:** To run multiple client instances from an IDE like **IntelliJ IDEA**, 
 > go to **Run/Debug Configurations**, select **PokerGuiLauncher**, and enable the **"Allow multiple instances"** 
