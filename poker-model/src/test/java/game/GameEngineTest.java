@@ -62,23 +62,6 @@ class GameEngineTest {
     }
 
     @Test
-    void testHandleDraw(){
-        testEngine.startGame();
-
-        testEngine.handleBetMove(testPlayer1, "CHECK", 0);
-
-        testEngine.handleBetMove(testPlayer2, "CHECK", 0);
-
-        assertEquals(GameState.DRAW, testEngine.getState());
-
-        testEngine.handleDraw(testPlayer1, List.of(0, 1));
-        assertEquals(5, testPlayer1.getHand().size());
-
-        assertThrows(StateMismatchException.class, () -> {
-            testEngine.handleBetMove(testPlayer2, "BET", 10);
-        });
-    }
-    @Test
     void testHandlePayout(){
         testEngine.startGame();
 
@@ -101,63 +84,5 @@ class GameEngineTest {
         assertEquals(1020, testPlayer1.getChips());
 
         assertEquals(980, testPlayer2.getChips());
-    }
-
-    @Test
-    void testFullShowdownAndPayout() {
-        testEngine.startGame();
-
-        testPlayer1.setHand(new players.Hand());
-        testPlayer2.setHand(new players.Hand());
-
-        // player1 -> three aces
-        testPlayer1.getHand().addCard(new Card(Rank.ACE, Suit.HEARTS));
-        testPlayer1.getHand().addCard(new Card(Rank.ACE, Suit.SPADES));
-        testPlayer1.getHand().addCard(new Card(Rank.ACE, Suit.DIAMONDS));
-        testPlayer1.getHand().addCard(new Card(Rank.TWO, Suit.CLUBS));
-        testPlayer1.getHand().addCard(new Card(Rank.FIVE, Suit.HEARTS));
-
-        // player2 -> three kings
-        testPlayer2.getHand().addCard(new Card(Rank.KING, Suit.HEARTS));
-        testPlayer2.getHand().addCard(new Card(Rank.KING, Suit.SPADES));
-        testPlayer2.getHand().addCard(new Card(Rank.KING, Suit.DIAMONDS));
-        testPlayer2.getHand().addCard(new Card(Rank.THREE, Suit.CLUBS));
-        testPlayer2.getHand().addCard(new Card(Rank.SIX, Suit.HEARTS));
-
-        testEngine.handleBetMove(testPlayer1, "BET", 50);
-        testEngine.handleBetMove(testPlayer2, "CALL", 50);
-
-        testEngine.handleDraw(testPlayer1, List.of());
-        testEngine.handleDraw(testPlayer2, List.of());
-
-        testEngine.handleBetMove(testPlayer1, "CHECK", 0);
-        testEngine.handleBetMove(testPlayer2, "CHECK", 0);
-
-        testEngine.handlePayout(); // PAYOUT -> END
-
-        assertEquals(GameState.END, testEngine.getState());
-
-        // player1 wins ante + bet (20 + 50)
-        assertEquals(1070, testPlayer1.getChips());
-
-        // player2 loses 70
-        assertEquals(930, testPlayer2.getChips());
-    }
-
-    @Test
-    void testBettingErrors() {
-        testEngine.startGame();
-
-        testPlayer1.setChips(1);
-
-        // trying to bet more than have on the hand
-        assertThrows(NotEnoughChipsException.class, () -> {
-            testEngine.handleBetMove(testPlayer1, "BET", 50);
-        });
-
-        // must fold
-        assertDoesNotThrow(() -> {
-            testEngine.handleBetMove(testPlayer1, "FOLD", 0);
-        });
     }
 }

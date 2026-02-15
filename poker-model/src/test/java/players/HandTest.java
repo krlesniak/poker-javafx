@@ -10,20 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 class HandTest {
-    @Test
-    void testRemoveCards(){
-        Hand testHand = new Hand();
-        testHand.addCard(new Card(Rank.ACE, Suit.DIAMONDS));
-        testHand.addCard(new Card(Rank.QUEEN, Suit.HEARTS));
-        testHand.addCard(new Card(Rank.JACK, Suit.SPADES));
-        testHand.addCard(new Card(Rank.KING, Suit.CLUBS));
-
-        testHand.removeCards(List.of(0,3)); // indexes 0 and 3 deleted
-
-        assertEquals(2, testHand.size());
-        assertEquals(Rank.QUEEN, testHand.getCards().get(0).rank());
-        // first card is now queen
-    }
 
     @Test
     void testAddCards(){

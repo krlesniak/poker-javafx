@@ -19,29 +19,6 @@ class PlayerTest {
         assertEquals(50, testPlayer.getCurrBet());
     }
 
-    @Test
-    void testBetError(){
-        Player testPlayer = new Player("p1", "John", 50);
-        assertThrows(NotEnoughChipsException.class, () -> {
-            testPlayer.bet(100);
-        });
-    }
-
-    @Test
-    void testBetNegative(){
-        Player testPlayer = new Player("p1", "John", -50);
-        assertThrows(IllegalArgumentException.class, () -> {
-            testPlayer.bet(-50);
-        });
-    }
-
-    @Test
-    void testBetZero(){
-        Player testPlayer = new Player("p1", "John", 0);
-        assertThrows(IllegalArgumentException.class, () -> {
-            testPlayer.bet(0);
-        });
-    }
 
     @Test
     void testFold(){

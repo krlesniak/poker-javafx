@@ -52,4 +52,12 @@ public class Player {
     public boolean isFolded() { return folded; }
     public boolean hasActed() { return acted; }
     public void setActed(boolean acted) { this.acted = acted; }
+
+    public void setHand(Hand hand) {
+        this.hand = hand;
+    }
+    public void setChips(int chips) {
+        this.chips = chips;
+    }
+
 }

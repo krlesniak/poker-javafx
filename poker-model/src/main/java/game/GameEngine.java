@@ -3,6 +3,7 @@ package game;
 import cards.Deck;
 import hierarchy.HandChecker;
 import hierarchy.HandValue;
+import players.Hand;
 import players.Player;
 import java.util.List;
 import java.util.ArrayList;
@@ -56,8 +57,8 @@ public class GameEngine {
     public void restartGame() {
         if (players.size() < 2) throw new IllegalStateException("Too few players");
         for (Player p : players) {
-            if (p.getChips() <= 0) throw new IllegalStateException("Player " + p.getName() +
-                    " lost all his / her chips. click RESET GAME to start a new game.");
+            if (p.getChips() <= 0) throw new IllegalStateException(p.getName() +
+                    " lost all chips. Click RESET GAME to start a new game.");
         }
         startGame();
     }
